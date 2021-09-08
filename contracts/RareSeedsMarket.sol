@@ -12,94 +12,91 @@ contract RareSeedsMarket {
 
     uint256 public seedIndex;
 
-    int32 public maxSeed = 2147483647;
-    int32 public minSeed = -2147483647;
+    int64 public maxSeed = 9223372036854775807;
+    int64 public minSeed = -9223372036854775808;
 
     bool public allSeedsAssigned = false;
     uint256 public seedsRemainingToAssign = 0;
+    uint256 public mintFee = 3000000000000000;
 
+    mapping(int64 => address) public seedValueToAddress;
 
-    //mapping (address => uint) public addressToSeedIndex;
-    mapping(int32 => address) public seedValueToAddress;
+    mapping(int64 => string) public seedValueToWorldName;
 
-    /* This creates an array with all balances */
     mapping(address => uint256) public balanceOf;
 
-    // This maps the mint index to the seed.
-    mapping(uint256 => int32) public indexToSeed;
+    mapping(uint256 => int64 ) public indexToSeed;
 
     struct Offer {
         bool isForSale;
-        int32 seedValue;
+        int64 seedValue;
         address seller;
-        uint256 minValue; // in ether
-        address onlySellTo; // specify to sell only to a specific person
+        uint256 minValue;
+        address onlySellTo;
     }
 
     struct Bid {
         bool hasBid;
-        int32 seedValue;
+        int64 seedValue;
         address bidder;
         uint256 value;
     }
 
-    // A record of seeds that are offered for sale at a specific minimum value, and perhaps to a specific person
-    mapping(int32 => Offer) public seedsOfferedForSale;
+    mapping(int64 => Offer) public seedsOfferedForSale;
 
-    // A record of the highest seed bid
-    mapping(int32 => Bid) public seedBids;
+    mapping(int64 => Bid) public seedBids;
 
     mapping(address => uint256) public pendingWithdrawals;
 
-    event Assign(address indexed to, int32 seedValue);
+    event Assign(address indexed to, int64 seedValue);
 
     event Transfer(address indexed from, address indexed to, uint256 value);
 
     event SeedTransfer(
         address indexed from,
         address indexed to,
-        int32 seedValue
+        int64 seedValue
     );
 
     event SeedOffered(
-        int32 indexed seedValue,
+        int64 indexed seedValue,
         uint256 minValue,
         address indexed toAddress
     );
 
     event SeedBidEntered(
-        int32 indexed seedValue,
+        int64 indexed seedValue,
         uint256 value,
         address indexed fromAddress
     );
 
     event SeedBidWithdrawn(
-        int32 indexed seedValue,
+        int64 indexed seedValue,
         uint256 value,
         address indexed fromAddress
     );
 
     event SeedBought(
-        int32 indexed seedValue,
+        int64 indexed seedValue,
         uint256 value,
         address indexed fromAddress,
         address indexed toAddress
     );
 
-    event SeedNoLongerForSale(int32 indexed seedValue);
+    event SeedNoLongerForSale(int64 indexed seedValue);
 
     /* Initializes contract with initial supply tokens to the creator of the contract */
     constructor() {
         owner = msg.sender;
-        totalSupply = 500; // Update total supply
+        totalSupply = 512;
         seedsRemainingToAssign = totalSupply;
-        name = "RARESEEDS"; // Set the name for display purposes
-        symbol = "RSX"; // Set the symbol for display purposes
-        decimals = 0; // Amount of decimals for display purposes
+        name = "RARESEEDS";
+        symbol = "RSX";
+        decimals = 0;
         seedIndex = 0;
     }
 
-    function setInitialOwner(address to, int32 seedValue) private {
+    function setInitialOwner(address to, int64 seedValue) private {
         assert(msg.sender != owner);
         assert(allSeedsAssigned);
         assert(seedValue >= 10000);
@@ -113,7 +110,7 @@ contract RareSeedsMarket {
 
     function setInitialOwners(
         address[] calldata addresses,
-        int32[] calldata indices
+        int64[] calldata indices
     ) private {
         if (msg.sender != owner) revert();
         uint256 n = addresses.length;
@@ -127,11 +124,11 @@ contract RareSeedsMarket {
         allSeedsAssigned = true;
     }
 
-    function isSeedValid(int32 seedValue) private view returns(bool) {
+    function isSeedValid(int64 seedValue) private view returns(bool) {
         return (seedValue <= maxSeed || seedValue >= minSeed || seedValue != 0);
     }
 
-    function getSeed(int32 seedValue) public payable {
+    function getSeed(int64 seedValue, string memory worldName) public payable {
         if (allSeedsAssigned) revert("All seeds assigned.");
         if (seedsRemainingToAssign == 0) revert("no seeds remaining.");
         if (seedIndex > totalSupply) revert("no more seeds remaining.");
@@ -139,17 +136,18 @@ contract RareSeedsMarket {
             revert("Seed out of range.");
         if (seedValueToAddress[seedValue] != address(0))
             revert("Already taken.");
-
+        if (msg.value < mintFee) revert("Not enough mint fees supplied");
         seedValueToAddress[seedValue] = msg.sender;
+        seedValueToWorldName[seedValue] = worldName;
         balanceOf[msg.sender]++;
         seedsRemainingToAssign--;
         seedIndex++;
         indexToSeed[seedIndex] = seedValue;
+        pendingWithdrawals[owner] += msg.value;
         emit Assign(msg.sender, seedValue);
     }
 
-    // Transfer ownership of a seed to another user without requiring payment
-    function transferSeed(address to, int32 seedValue) private {
+    function transferSeed(address to, int64 seedValue) private {
         if (!allSeedsAssigned) revert();
         if (seedValueToAddress[seedValue] != msg.sender) revert();
         if (isSeedValid(seedValue) == false)
@@ -173,7 +171,7 @@ contract RareSeedsMarket {
         }
     }
 
-    function seedNoLongerForSale(int32 seedValue) private {
+    function seedNoLongerForSale(int64 seedValue) private {
         if (!allSeedsAssigned) revert();
         if (seedValueToAddress[seedValue] != msg.sender) revert();
         if (isSeedValid(seedValue) == false)
@@ -188,7 +186,7 @@ contract RareSeedsMarket {
         emit SeedNoLongerForSale(seedValue);
     }
 
-    function offerSeedForSale(int32 seedValue, uint256 minSalePriceInWei)
+    function offerSeedForSale(int64 seedValue, uint256 minSalePriceInWei)
     public
     {
         // if (!allSeedsAssigned) revert();
@@ -206,7 +204,7 @@ contract RareSeedsMarket {
     }
 
     function offerSeedForSaleToAddress(
-        int32 seedValue,
+        int64 seedValue,
         uint256 minSalePriceInWei,
         address toAddress
     ) private {
@@ -224,7 +222,7 @@ contract RareSeedsMarket {
         emit SeedOffered(seedValue, minSalePriceInWei, toAddress);
     }
 
-    function buySeed(int32 seedValue) public payable {
+    function buySeed(int64 seedValue) public payable {
         if (!allSeedsAssigned) revert("All seeds assigned.");
         Offer memory offer = seedsOfferedForSale[seedValue];
         if (isSeedValid(seedValue) == false)
@@ -265,7 +263,7 @@ contract RareSeedsMarket {
         payable(msg.sender).transfer(amount);
     }
 
-    function enterBidForSeed(int32 seedValue) public payable {
+    function enterBidForSeed(int64 seedValue) public payable {
         if (isSeedValid(seedValue) == false)
             revert("Seed out of range.");
         // if (!allSeedsAssigned) revert();
@@ -282,7 +280,7 @@ contract RareSeedsMarket {
         emit SeedBidEntered(seedValue, msg.value, msg.sender);
     }
 
-    function acceptBidForSeed(int32 seedValue, uint256 minPrice) public {
+    function acceptBidForSeed(int64 seedValue, uint256 minPrice) public {
         if (isSeedValid(seedValue) == false)
             revert("Seed out of range.");
         // if (!allSeedsAssigned) revert();
@@ -310,7 +308,7 @@ contract RareSeedsMarket {
         emit SeedBought(seedValue, bid.value, seller, bid.bidder);
     }
 
-    function withdrawBidForSeed(int32 seedValue) public {
+    function withdrawBidForSeed(int64 seedValue) public {
         if (isSeedValid(seedValue) == false)
             revert("Seed out of range.");
         if (!allSeedsAssigned) revert();
