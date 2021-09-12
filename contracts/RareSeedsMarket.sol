@@ -25,7 +25,9 @@ contract RareSeedsMarket {
 
     mapping(address => uint256) public balanceOf;
 
-    mapping(uint256 => int64 ) public indexToSeed;
+    mapping(uint256 => int64) public indexToSeed;
+
+    mapping (int64 => string) public seedValueToUri;
 
     struct Offer {
         bool isForSale;
@@ -96,6 +98,11 @@ contract RareSeedsMarket {
         seedIndex = 0;
     }
 
+    function updateMintFee(uint256 newValue) public {
+        assert(msg.sender != owner);
+        mintFee = newValue;
+    }
+
     function setInitialOwner(address to, int64 seedValue) private {
         assert(msg.sender != owner);
         assert(allSeedsAssigned);
@@ -128,7 +135,7 @@ contract RareSeedsMarket {
         return (seedValue <= maxSeed || seedValue >= minSeed || seedValue != 0);
     }
 
-    function getSeed(int64 seedValue, string memory worldName) public payable {
+    function getSeed(int64 seedValue, string memory worldName, string memory uri) public payable {
         if (allSeedsAssigned) revert("All seeds assigned.");
         if (seedsRemainingToAssign == 0) revert("no seeds remaining.");
         if (seedIndex > totalSupply) revert("no more seeds remaining.");
@@ -139,6 +146,7 @@ contract RareSeedsMarket {
         if (msg.value < mintFee) revert("Not enough mint fees supplied");
         seedValueToAddress[seedValue] = msg.sender;
         seedValueToWorldName[seedValue] = worldName;
+        seedValueToUri[seedValue] = uri;
         balanceOf[msg.sender]++;
         seedsRemainingToAssign--;
         seedIndex++;
@@ -171,8 +179,7 @@ contract RareSeedsMarket {
         }
     }
 
-    function seedNoLongerForSale(int64 seedValue) private {
-        if (!allSeedsAssigned) revert();
+    function seedNoLongerForSale(int64 seedValue) public {
         if (seedValueToAddress[seedValue] != msg.sender) revert();
         if (isSeedValid(seedValue) == false)
             revert("Seed out of range.");
@@ -321,5 +328,10 @@ contract RareSeedsMarket {
         seedBids[seedValue] = Bid(false, seedValue, address(0), 0);
         // Refund the bid money
         payable(msg.sender).transfer(amount);
+    }
+
+    function setSeedUri(int64 seedValue, string memory uri) public {
+        if(msg.sender != seedValueToAddress[seedValue]) revert("Sender is not owner");
+        seedValueToUri[seedValue] = uri;
     }
 }
